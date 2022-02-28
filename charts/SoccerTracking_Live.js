@@ -20,7 +20,6 @@ const tradeMetadata = [
 function getChartData(data) {
   let traces = [];
   let frames = [];
-  let sliderSteps = [];
 
   data.forEach((frame) => {
     const tracesForFrame = tradeMetadata.map((metadata) => {
@@ -44,79 +43,81 @@ function getChartData(data) {
         type: "fill",
         mode: "markers",
         marker: { color: metadata.color },
+        name: metadata.key,
       };
-    });
-
-    tracesForFrame.push({
-      x: [0, 0, 1, 1, 0.5],
-      y: [0, 1, 0, 1, 0.5],
-      type: "fill",
-      mode: "markers",
-      marker: { color: "grey" },
     });
 
     frames.push({
       name: frame.timestamp,
       data: tracesForFrame,
     });
-
-    traces = frames[0].data;
-
-    sliderSteps.push({
-      method: "animate",
-      label: frame.timestamp,
-      args: [
-        [frame.timestamp],
-        {
-          mode: "immediate",
-          transition: { duration: 0 },
-          frame: { duration: 0, redraw: false },
-        },
-      ],
-    });
   });
+
+  traces = frames[0].data;
 
   return {
     traces,
     frames,
-    sliderSteps,
   };
 }
 
 export default function SoccerTrackingChart() {
   const [data, setData] = useState(null);
-  const [isLoading, setLoading] = useState(false);
+  const [chartData, setChartData] = useState(null);
+  const [frame, setFrame] = useState(0);
 
   useEffect(() => {
-    setLoading(true);
     const intervalId = setInterval(() => {
       const startIndex = data ? data[data.length - 1].index : 0;
       fetch(`http://localhost:5000/data?start_index=${startIndex}`)
         .then((res) => res.json())
         .then((liveData) => {
+          if (liveData.length == 0) {
+            clearInterval(intervalId);
+            return;
+          }
+
           if (!data) {
             setData(liveData);
+            setChartData(getChartData(liveData));
           } else {
-            console.log(data);
             setData([...data, ...liveData]);
+
+            const liveChartData = getChartData(liveData);
+
+            setChartData({
+              ...chartData,
+              frames: [...chartData.frames, ...liveChartData.frames],
+            });
           }
-          setLoading(false);
         });
     }, 2000);
 
     return () => clearInterval(intervalId);
-  }, [data]);
+  }, [data, chartData]);
 
-  // if (isLoading) return <p>Loading...</p>;
-  if (!data) return <p>No profile data</p>;
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!chartData) {
+        return;
+      }
 
-  const chartData = getChartData(data);
+      if (frame >= chartData.frames.length - 1) {
+        return;
+      }
+
+      setFrame(frame + 1);
+    }, 5);
+
+    return () => clearInterval(intervalId);
+  }, [chartData, frame]);
+
+  if (!chartData) return <p>Loading</p>;
 
   return (
     <Plot
       style={{ position: "relative" }}
-      data={chartData.traces}
-      frames={chartData.frames}
+      data={chartData.frames[frame].data}
       config={{
         displayModeBar: false,
       }}
@@ -154,59 +155,6 @@ export default function SoccerTrackingChart() {
             y: 1,
             sizex: 1,
             sizey: 1,
-          },
-        ],
-        updatemenus: [
-          {
-            x: 0,
-            y: 0,
-            yanchor: "top",
-            xanchor: "left",
-            showactive: false,
-            direction: "left",
-            type: "buttons",
-            pad: { t: 87, r: 10 },
-            buttons: [
-              {
-                method: "animate",
-                args: [
-                  null,
-                  {
-                    mode: "immediate",
-                    fromcurrent: true,
-                    transition: { duration: 40 },
-                    frame: { duration: 40, redraw: false },
-                  },
-                ],
-                label: "Play",
-              },
-              {
-                method: "animate",
-                args: [
-                  [null],
-                  {
-                    mode: "immediate",
-                    transition: { duration: 0 },
-                    frame: { duration: 0, redraw: false },
-                  },
-                ],
-                label: "Pause",
-              },
-            ],
-          },
-        ],
-        // Finally, add the slider and use `pad` to position it
-        // nicely next to the buttons.
-        sliders: [
-          {
-            pad: { l: 130, t: 55 },
-            currentvalue: {
-              visible: true,
-              prefix: "Timestamp:",
-              xanchor: "right",
-              font: { size: 20, color: "#666" },
-            },
-            steps: chartData.sliderSteps,
           },
         ],
       }}

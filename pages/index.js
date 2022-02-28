@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 
-const SoccerTrackingChart = dynamic(() => import("../charts/SoccerTracking"), {
+const SoccerTrackingChart = dynamic(() => import("../charts/SoccerTracking_Live"), {
   ssr: false,
 });
 
